@@ -12,58 +12,63 @@ from langchain.schema import Document
 openai_api_key = "sk-tEGcP0ez_Xuf-Grr9KP_OKaC-6M006UnOR28nrE_U9T3BlbkFJIcbflkGDUjX4bV7bsJz_RoCoLzwx_8_iHGMwo88uIA"
 embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
 
-# Répertoire contenant les documents
-directory = "C:/Users/z.mokri/Downloads/CCI"
+# Interface utilisateur avec Streamlit
+st.title("Chat avec LLM + RAG")
 
-# Fonction pour charger les documents
-def load_documents_from_directory(directory):
-    documents = []
-    for filename in os.listdir(directory):
-        file_path = os.path.join(directory, filename)
-        if filename.endswith(".pdf"):
-            loader = PyPDFLoader(file_path)
-            documents.extend(loader.load())
-        elif filename.endswith(".docx"):
-            loader = UnstructuredWordDocumentLoader(file_path)
-            documents.extend(loader.load())
-        elif filename.endswith(".xlsx"):
-            loader = UnstructuredExcelLoader(file_path)
-            documents.extend(loader.load())
-    return documents
+directory = st.text_input("C:/Users/z.mokri/Downloads/CCI")
 
-# Charger tous les documents du répertoire
-documents = load_documents_from_directory(directory)
+if st.button("Charger et préparer les documents"):
+    # Fonction pour charger les documents
+    def load_documents_from_directory(directory):
+        documents = []
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+            if filename.endswith(".pdf"):
+                loader = PyPDFLoader(file_path)
+                documents.extend(loader.load())
+            elif filename.endswith(".docx"):
+                loader = UnstructuredWordDocumentLoader(file_path)
+                documents.extend(loader.load())
+            elif filename.endswith(".xlsx"):
+                loader = UnstructuredExcelLoader(file_path)
+                documents.extend(loader.load())
+        return documents
 
-# Convertir les contenus en objets Document
-doc_objects = []
-for doc in documents:
-    if isinstance(doc, str):
-        doc_objects.append(Document(page_content=doc))
-    elif hasattr(doc, 'text'):
-        doc_objects.append(Document(page_content=doc.text))
-    else:
-        doc_objects.append(Document(page_content=str(doc)))
+    # Charger tous les documents du répertoire
+    documents = load_documents_from_directory(directory)
 
-# Créer un splitter pour diviser le texte en morceaux plus petits
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    # Convertir les contenus en objets Document
+    doc_objects = []
+    for doc in documents:
+        if isinstance(doc, str):
+            doc_objects.append(Document(page_content=doc))
+        elif hasattr(doc, 'text'):
+            doc_objects.append(Document(page_content=doc.text))
+        else:
+            doc_objects.append(Document(page_content=str(doc)))
 
-# Diviser les documents chargés en morceaux plus petits
-split_documents = [text_splitter.split_text(doc.page_content) for doc in doc_objects]
+    # Créer un splitter pour diviser le texte en morceaux plus petits
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
 
-# Aplatir la liste de listes en une seule liste de morceaux de texte
-flattened_documents = [item for sublist in split_documents for item in sublist]
+    # Diviser les documents chargés en morceaux plus petits
+    split_documents = [text_splitter.split_text(doc.page_content) for doc in doc_objects]
 
-# Créer une base de données FAISS pour la recherche
-faiss_documents = [Document(page_content=chunk) for chunk in flattened_documents]
-db = FAISS.from_documents(faiss_documents, embeddings)
+    # Aplatir la liste de listes en une seule liste de morceaux de texte
+    flattened_documents = [item for sublist in split_documents for item in sublist]
 
-# Configurer une chaîne de récupération avec un modèle OpenAI
-qa_chain = RetrievalQA.from_chain_type(
-    llm=OpenAI(openai_api_key="sk-tEGcP0ez_Xuf-Grr9KP_OKaC-6M006UnOR28nrE_U9T3BlbkFJIcbflkGDUjX4bV7bsJz_RoCoLzwx_8_iHGMwo88uIA"),
-    retriever=db.as_retriever()
-)
+    # Créer une base de données FAISS pour la recherche
+    faiss_documents = [Document(page_content=chunk) for chunk in flattened_documents]
+    db = FAISS.from_documents(faiss_documents, embeddings)
 
- # Poser une question au modèle
+    st.success("Documents chargés et préparés avec succès!")
+
+    # Configurer une chaîne de récupération avec un modèle OpenAI
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=OpenAI(openai_api_key="sk-tEGcP0ez_Xuf-Grr9KP_OKaC-6M006UnOR28nrE_U9T3BlbkFJIcbflkGDUjX4bV7bsJz_RoCoLzwx_8_iHGMwo88uIA"),
+        retriever=db.as_retriever()
+    )
+
+    # Poser une question au modèle
     question = st.text_input("Entrez votre question:")
 
     if question:
